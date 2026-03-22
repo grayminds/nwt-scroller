@@ -19,8 +19,18 @@ class BibleReference {
     return '$bb$ccc$vvv';
   }
 
-  Uri toJwLibraryUri() {
-    return Uri.parse('jwlibrary:///finder?bible=$code');
+  /// JW Library locale codes for supported languages.
+  static const languageCodes = {
+    'English': 'E',
+    'Spanish': 'S',
+    'Russian': 'U',
+    'French': 'F',
+    'Italian': 'I',
+  };
+
+  Uri toJwLibraryUri({String language = 'English'}) {
+    final locale = languageCodes[language] ?? 'E';
+    return Uri.parse('jwlibrary:///finder?bible=$code&wtlocale=$locale');
   }
 
   /// Book-level open: chapter 1, verse 1 as fallback.

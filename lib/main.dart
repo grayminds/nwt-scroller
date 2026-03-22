@@ -149,7 +149,7 @@ class _PermissionPageState extends State<PermissionPage>
 
   Future<void> _startOverlay() async {
     await _config.save();
-    final cs = OverlayService.compassSize(_config.fontSize, _config.overlayScale);
+    final cs = OverlayService.compassSize(_config.overlayScale);
     final size = OverlayService.collapsedDisplaySize(cs);
     await OverlayService.showOverlay(size);
     // Position from main app (overlay engine can't reliably detect screen size)
@@ -360,6 +360,19 @@ class _PermissionPageState extends State<PermissionPage>
             displayValue: '${(_config.widthScale * 100).round()}%',
             onChanged: (v) {
               _updateConfig(() => _config.widthScale = v);
+            },
+            brown: brown,
+          ),
+          const SizedBox(height: 12),
+          _buildSliderRow(
+            label: 'Height scale',
+            value: _config.heightScale,
+            min: 0.5,
+            max: 2.0,
+            divisions: 15,
+            displayValue: '${(_config.heightScale * 100).round()}%',
+            onChanged: (v) {
+              _updateConfig(() => _config.heightScale = v);
             },
             brown: brown,
           ),

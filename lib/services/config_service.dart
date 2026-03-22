@@ -12,6 +12,7 @@ class ConfigService {
   static const _overlayScaleKey = 'overlay_scale';
   static const _fontSizeKey = 'font_size';
   static const _widthScaleKey = 'width_scale';
+  static const _heightScaleKey = 'height_scale';
   static const _languageKey = 'language';
   static const _selectionBarHeightKey = 'selection_bar_height';
 
@@ -22,6 +23,7 @@ class ConfigService {
   double overlayScale = 1.0;
   double fontSize = 14.0;
   double widthScale = 1.0;
+  double heightScale = 1.0;
   String language = 'English';
   double selectionBarHeight = 1.0;
   double screenWidth = 0;
@@ -49,6 +51,7 @@ class ConfigService {
     overlayScale = (prefs.getDouble(_overlayScaleKey) ?? 1.0).clamp(0.8, 1.5);
     fontSize = (prefs.getDouble(_fontSizeKey) ?? 14.0).clamp(10.0, 32.0);
     widthScale = (prefs.getDouble(_widthScaleKey) ?? 1.0).clamp(0.5, 2.0);
+    heightScale = (prefs.getDouble(_heightScaleKey) ?? 1.0).clamp(0.5, 2.0);
     language = prefs.getString(_languageKey) ?? 'English';
     selectionBarHeight =
         (prefs.getDouble(_selectionBarHeightKey) ?? 1.0).clamp(0.5, 2.0);
@@ -63,6 +66,7 @@ class ConfigService {
     await prefs.setDouble(_overlayScaleKey, overlayScale);
     await prefs.setDouble(_fontSizeKey, fontSize);
     await prefs.setDouble(_widthScaleKey, widthScale);
+    await prefs.setDouble(_heightScaleKey, heightScale);
     await prefs.setString(_languageKey, language);
     await prefs.setDouble(_selectionBarHeightKey, selectionBarHeight);
   }
@@ -77,6 +81,7 @@ class ConfigService {
       'overlayScale': overlayScale,
       'fontSize': fontSize,
       'widthScale': widthScale,
+      'heightScale': heightScale,
       'language': language,
       'selectionBarHeight': selectionBarHeight,
       'screenWidth': screenWidth,
@@ -97,6 +102,7 @@ class ConfigService {
         (map['overlayScale'] as num?)?.toDouble() ?? overlayScale;
     fontSize = (map['fontSize'] as num?)?.toDouble() ?? fontSize;
     widthScale = (map['widthScale'] as num?)?.toDouble() ?? widthScale;
+    heightScale = (map['heightScale'] as num?)?.toDouble() ?? heightScale;
     language = map['language'] as String? ?? language;
     selectionBarHeight =
         (map['selectionBarHeight'] as num?)?.toDouble() ?? selectionBarHeight;
@@ -138,6 +144,11 @@ class ConfigService {
 
   Future<void> setWidthScale(double value) async {
     widthScale = value.clamp(0.5, 2.0);
+    await save();
+  }
+
+  Future<void> setHeightScale(double value) async {
+    heightScale = value.clamp(0.5, 2.0);
     await save();
   }
 

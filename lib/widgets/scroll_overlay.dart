@@ -41,14 +41,15 @@ class _ScrollOverlayState extends State<ScrollOverlay>
 
   /// Internal compass size for expanded layout calculations
   int get _compassSize =>
-      OverlayService.compassSize(_config.fontSize, _config.overlayScale);
+      OverlayService.compassSize(_config.overlayScale);
 
   /// Collapsed overlay display size — matches the visual compass in expanded handles
   int get _collapsedSize =>
       OverlayService.collapsedDisplaySize(_compassSize);
 
   /// Expanded bar height — taller than compass to show 5 picker rows
-  int get _expandedHeight => (_compassSize * 5 / 3).round();
+  int get _expandedHeight =>
+      (_compassSize * 5 / 3 * _config.heightScale).round();
 
   @override
   void initState() {

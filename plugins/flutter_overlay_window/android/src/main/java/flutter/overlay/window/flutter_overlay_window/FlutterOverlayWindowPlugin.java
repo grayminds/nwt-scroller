@@ -123,9 +123,11 @@ public class FlutterOverlayWindowPlugin implements
             result.success(OverlayService.getCurrentPosition());
         } else if (call.method.equals("setCustomDrag")) {
             boolean enabled = call.argument("enabled");
-            int zoneWidthPx = call.argument("zoneWidthPx");
+            int zoneWidthDp = call.argument("zoneWidthPx");
+            // Convert DP to PX — event.getX() in onTouch returns raw pixels
+            float density = context.getResources().getDisplayMetrics().density;
             OverlayService.customDragEnabled = enabled;
-            OverlayService.customDragZoneWidthPx = zoneWidthPx;
+            OverlayService.customDragZoneWidthPx = (int)(zoneWidthDp * density);
             result.success(true);
         } else if (call.method.equals("closeOverlay")) {
             if (OverlayService.isRunning) {

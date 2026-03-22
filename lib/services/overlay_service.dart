@@ -3,8 +3,9 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 class OverlayService {
   /// Compute the unified compass display size from config values.
   /// This is THE single source of truth for all overlay sizing.
-  static int compassSize(double fontSize, double overlayScale) {
-    return (fontSize * 1.1 * 3.0 * overlayScale).round().clamp(36, 160);
+  /// Uses a fixed base (50dp) scaled by overlayScale — independent of fontSize.
+  static int compassSize(double overlayScale) {
+    return (50 * overlayScale).round().clamp(36, 100);
   }
 
   /// Handle width = 1/3 of compass size for compact handles.

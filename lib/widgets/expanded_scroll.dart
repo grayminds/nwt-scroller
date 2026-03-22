@@ -60,7 +60,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   int get _verseCount => _currentBook.verseCount(_selectedChapter + 1);
 
   int get _compassSize =>
-      OverlayService.compassSize(widget.config.fontSize, widget.config.overlayScale);
+      OverlayService.compassSize(widget.config.overlayScale);
   double get _handleWidth => OverlayService.handleWidth(_compassSize);
   double get _itemExtent => _compassSize / 3.0;
 
@@ -121,9 +121,11 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     });
   }
 
+  String get _language => widget.config.language;
+
   Future<void> _onBookTap(int index) async {
     widget.haptics.selectionClick();
-    await LauncherService.launchBook(_currentBook.number, _currentBook.name);
+    await LauncherService.launchBook(_currentBook.number, _currentBook.name, language: _language);
   }
 
   Future<void> _onChapterTap(int index) async {
@@ -132,6 +134,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       _currentBook.number,
       _selectedChapter + 1,
       _currentBook.name,
+      language: _language,
     );
   }
 
@@ -143,7 +146,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       verse: _selectedVerse + 1,
       bookName: _currentBook.name,
     );
-    final success = await LauncherService.launch(ref);
+    final success = await LauncherService.launch(ref, language: _language);
     if (!mounted) return;
     if (success) {
       final entry = HistoryEntry(
