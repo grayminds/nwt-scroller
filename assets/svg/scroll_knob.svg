@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 72">
+  <defs>
+    <linearGradient id="kshaft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3A1E0A"/>
+      <stop offset="20%" stop-color="#5C3A1E"/>
+      <stop offset="50%" stop-color="#7B4A2A"/>
+      <stop offset="80%" stop-color="#5C3A1E"/>
+      <stop offset="100%" stop-color="#3A1E0A"/>
+    </linearGradient>
+    <radialGradient id="kball" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#8B5E3C"/>
+      <stop offset="40%" stop-color="#6B3A1A"/>
+      <stop offset="80%" stop-color="#4A2810"/>
+      <stop offset="100%" stop-color="#2E1608"/>
+    </radialGradient>
+    <linearGradient id="kring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2E1608"/>
+      <stop offset="40%" stop-color="#5C3A1E"/>
+      <stop offset="60%" stop-color="#5C3A1E"/>
+      <stop offset="100%" stop-color="#2E1608"/>
+    </linearGradient>
+    <linearGradient id="khl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+  <!-- Top ball -->
+  <ellipse cx="26" cy="10" rx="22" ry="10" fill="url(#kball)"/>
+  <ellipse cx="26" cy="10" rx="22" ry="10" fill="url(#khl)"/>
+  <!-- Top ring -->
+  <rect x="6" y="18" width="40" height="5" rx="2.5" fill="url(#kring)"/>
+  <!-- Short shaft -->
+  <rect x="13" y="23" width="26" height="26" fill="url(#kshaft)"/>
+  <!-- Center ring -->
+  <rect x="10" y="33" width="32" height="4" rx="2" fill="url(#kring)" opacity="0.6"/>
+  <!-- Bottom ring -->
+  <rect x="6" y="49" width="40" height="5" rx="2.5" fill="url(#kring)"/>
+  <!-- Bottom ball -->
+  <ellipse cx="26" cy="62" rx="22" ry="10" fill="url(#kball)"/>
+  <ellipse cx="26" cy="62" rx="22" ry="10" fill="url(#khl)"/>
+</svg>
