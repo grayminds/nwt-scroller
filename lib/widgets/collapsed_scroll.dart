@@ -6,11 +6,13 @@ import '../theme/scroll_theme.dart';
 class CollapsedScroll extends StatefulWidget {
   final ScrollTheme theme;
   final VoidCallback onTap;
+  final int interactionStyle;
 
   const CollapsedScroll({
     super.key,
     required this.theme,
     required this.onTap,
+    this.interactionStyle = 1,
   });
 
   @override
@@ -52,18 +54,29 @@ class _CollapsedScrollState extends State<CollapsedScroll> {
 
   @override
   Widget build(BuildContext context) {
+    final compass = SvgPicture.asset(
+      'assets/svg/compass_rose.svg',
+      fit: BoxFit.contain,
+      colorFilter: ColorFilter.mode(
+        widget.theme.knobTint,
+        BlendMode.modulate,
+      ),
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _handleTap,
       child: SizedBox.expand(
-        child: SvgPicture.asset(
-          'assets/svg/compass_rose.svg',
-          fit: BoxFit.contain,
-          colorFilter: ColorFilter.mode(
-            widget.theme.knobTint,
-            BlendMode.modulate,
-          ),
-        ),
+        child: widget.interactionStyle == 2
+            ? Container(
+                decoration: BoxDecoration(
+                  color: widget.theme.background.withValues(alpha: 0.75),
+                  shape: BoxShape.circle,
+                ),
+                padding: const EdgeInsets.all(2),
+                child: compass,
+              )
+            : compass,
       ),
     );
   }

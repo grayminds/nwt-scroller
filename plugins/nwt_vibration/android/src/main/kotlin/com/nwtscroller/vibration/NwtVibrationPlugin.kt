@@ -44,6 +44,20 @@ class NwtVibrationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     result.success(false)
                 }
             }
+            "isPackageInstalled" -> {
+                val packageName = call.argument<String>("packageName")
+                if (packageName != null) {
+                    val installed = try {
+                        context?.packageManager?.getPackageInfo(packageName, 0)
+                        true
+                    } catch (e: Exception) {
+                        false
+                    }
+                    result.success(installed)
+                } else {
+                    result.success(false)
+                }
+            }
             "openMainApp" -> {
                 val opened = doOpenMainApp()
                 result.success(opened)

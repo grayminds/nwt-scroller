@@ -32,6 +32,16 @@ class BibleBook {
     );
   }
 
+  BibleBook copyWithNames({String? name, String? abbr, String? abbrMed}) {
+    return BibleBook(
+      number: number,
+      name: name ?? this.name,
+      abbr: abbr ?? this.abbr,
+      abbrMed: abbrMed ?? this.abbrMed,
+      verseCounts: verseCounts,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'number': number,
         'name': name,

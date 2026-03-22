@@ -5,11 +5,12 @@ import '../models/history_entry.dart';
 
 class HistoryRepository {
   static const _key = 'nwt_scroller_history';
-  static const maxEntries = 10;
+  static const maxEntries = 25;
 
   Future<List<HistoryEntry>> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final raw = prefs.getString(_key);
       if (raw == null) return [];
       final List<dynamic> list = json.decode(raw) as List<dynamic>;
@@ -29,6 +30,14 @@ class HistoryRepository {
       entries.removeRange(maxEntries, entries.length);
     }
     await _save(entries);
+  }
+
+  Future<void> removeAt(int index) async {
+    final entries = await load();
+    if (index >= 0 && index < entries.length) {
+      entries.removeAt(index);
+      await _save(entries);
+    }
   }
 
   Future<void> clear() async {

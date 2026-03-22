@@ -24,6 +24,17 @@ class NwtVibration {
     }
   }
 
+  /// Check if a package is installed on the device.
+  static Future<bool> isPackageInstalled(String packageName) async {
+    try {
+      final result = await _channel.invokeMethod(
+          'isPackageInstalled', {'packageName': packageName});
+      return result == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Bring the main app activity to the foreground.
   /// Works from overlay Service context.
   static Future<bool> openMainApp() async {

@@ -20,6 +20,10 @@ class OverlayService {
     return (compassSize * 2 / 3).round().clamp(24, 106);
   }
 
+  static Future<bool> checkPermission() async {
+    return FlutterOverlayWindow.isPermissionGranted();
+  }
+
   static Future<bool> requestPermission() async {
     final granted = await FlutterOverlayWindow.isPermissionGranted();
     if (granted) return true;

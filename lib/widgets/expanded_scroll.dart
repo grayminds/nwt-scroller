@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:nwt_vibration/nwt_vibration.dart';
 import '../models/bible_data.dart';
@@ -24,6 +25,10 @@ class ExpandedScroll extends StatefulWidget {
   final HistoryRepository historyRepo;
   final VoidCallback onCollapse;
   final VoidCallback onConfigChanged;
+  final int initialBook;
+  final int initialChapter;
+  final int initialVerse;
+  final void Function(int book, int chapter, int verse) onSelectionChanged;
 
   const ExpandedScroll({
     super.key,
@@ -34,6 +39,10 @@ class ExpandedScroll extends StatefulWidget {
     required this.historyRepo,
     required this.onCollapse,
     required this.onConfigChanged,
+    this.initialBook = 0,
+    this.initialChapter = 0,
+    this.initialVerse = 0,
+    required this.onSelectionChanged,
   });
 
   @override
@@ -45,15 +54,16 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   late FixedExtentScrollController _chapterController;
   late FixedExtentScrollController _verseController;
 
-  int _selectedBook = 0;
-  int _selectedChapter = 0;
-  int _selectedVerse = 0;
+  late int _selectedBook;
+  late int _selectedChapter;
+  late int _selectedVerse;
 
   bool _showHistory = false;
   List<HistoryEntry> _history = [];
 
   int _chapterPickerKey = 0;
   int _versePickerKey = 0;
+  Timer? _autoCollapseTimer;
 
   BibleBook get _currentBook => widget.books[_selectedBook];
   int get _chapterCount => _currentBook.chapterCount;
@@ -67,6 +77,9 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   @override
   void initState() {
     super.initState();
+    _selectedBook = widget.initialBook.clamp(0, widget.books.length - 1);
+    _selectedChapter = widget.initialChapter.clamp(0, _chapterCount - 1);
+    _selectedVerse = widget.initialVerse.clamp(0, _verseCount - 1);
     _bookController = FixedExtentScrollController(initialItem: _selectedBook);
     _chapterController =
         FixedExtentScrollController(initialItem: _selectedChapter);
@@ -80,8 +93,19 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     if (mounted) setState(() => _history = history);
   }
 
+  int get _interactionStyle => widget.config.interactionStyle;
+
+  void _resetAutoCollapseTimer() {
+    if (_interactionStyle != 2) return;
+    _autoCollapseTimer?.cancel();
+    _autoCollapseTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) widget.onCollapse();
+    });
+  }
+
   @override
   void dispose() {
+    _autoCollapseTimer?.cancel();
     _bookController.dispose();
     _chapterController.dispose();
     _verseController.dispose();
@@ -101,6 +125,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     _chapterController = FixedExtentScrollController(initialItem: 0);
     _verseController.dispose();
     _verseController = FixedExtentScrollController(initialItem: 0);
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetAutoCollapseTimer();
   }
 
   void _onChapterChanged(int index) {
@@ -112,6 +138,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     });
     _verseController.dispose();
     _verseController = FixedExtentScrollController(initialItem: 0);
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetAutoCollapseTimer();
   }
 
   void _onVerseChanged(int index) {
@@ -119,6 +147,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     setState(() {
       _selectedVerse = index;
     });
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetAutoCollapseTimer();
   }
 
   String get _language => widget.config.language;
@@ -140,6 +170,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
 
   Future<void> _onVerseTap(int index) async {
     widget.haptics.selectionClick();
+    _autoCollapseTimer?.cancel();
     final ref = BibleReference(
       book: _currentBook.number,
       chapter: _selectedChapter + 1,
@@ -156,6 +187,10 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       await widget.historyRepo.add(entry);
       if (!mounted) return;
       await _loadHistory();
+    }
+    // Style 2: auto-collapse after verse selection
+    if (_interactionStyle == 2 && mounted) {
+      widget.onCollapse();
     }
   }
 

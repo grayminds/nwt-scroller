@@ -100,6 +100,34 @@ public class OverlayService extends Service implements View.OnTouchListener {
         instance = null;
     }
 
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (windowManager == null || flutterView == null) return;
+
+        // Update screen size for new orientation
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+            windowManager.getDefaultDisplay().getSize(szWindow);
+        } else {
+            DisplayMetrics dm = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(dm);
+            szWindow.set(dm.widthPixels, dm.heightPixels);
+        }
+
+        // Clamp current overlay position to new screen bounds
+        WindowManager.LayoutParams params = (WindowManager.LayoutParams) flutterView.getLayoutParams();
+        int maxX = szWindow.x - params.width;
+        int maxY = szWindow.y - params.height;
+        if (maxX > 0) params.x = Math.max(0, Math.min(params.x, maxX));
+        if (maxY > 0) params.y = Math.max(0, Math.min(params.y, maxY));
+
+        try {
+            windowManager.updateViewLayout(flutterView, params);
+        } catch (Exception e) {
+            Log.e("OverlayService", "Failed to reposition on config change: " + e.getMessage());
+        }
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {

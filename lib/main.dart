@@ -7,6 +7,8 @@ import 'services/overlay_service.dart';
 import 'services/screen_service.dart';
 import 'services/config_service.dart';
 import 'services/haptic_service.dart';
+import 'data/history_repository.dart';
+import 'models/history_entry.dart';
 import 'widgets/scroll_overlay.dart';
 
 void main() {
@@ -59,23 +61,39 @@ class PermissionPage extends StatefulWidget {
 }
 
 class _PermissionPageState extends State<PermissionPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _permissionGranted = false;
   bool _overlayActive = false;
   final _config = ConfigService();
+  final _historyRepo = HistoryRepository();
   bool _configLoaded = false;
   StreamSubscription? _overlayDataSub;
+  List<HistoryEntry> _history = [];
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     WidgetsBinding.instance.addObserver(this);
     _listenForOverlayData();
     _initAndAutoStart();
   }
 
+  void _onTabChanged() {
+    if (_tabController.index == 1) _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final history = await _historyRepo.load();
+    if (mounted) setState(() => _history = history);
+  }
+
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _overlayDataSub?.cancel();
     super.dispose();
@@ -89,7 +107,9 @@ class _PermissionPageState extends State<PermissionPage>
   }
 
   Future<void> _checkPermissionAndStart() async {
-    await _checkPermission();
+    final granted = await OverlayService.checkPermission();
+    if (!mounted) return;
+    setState(() => _permissionGranted = granted);
     if (_permissionGranted) {
       await _checkOverlayStatus();
       if (!_overlayActive) {
@@ -195,7 +215,7 @@ class _PermissionPageState extends State<PermissionPage>
     return Scaffold(
       backgroundColor: const Color(0xFFF5E6C8),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Center(
             child: ConstrainedBox(
@@ -281,8 +301,32 @@ class _PermissionPageState extends State<PermissionPage>
                       style: TextStyle(fontSize: 13, color: brownLight),
                     ),
                   ],
-                  const SizedBox(height: 32),
-                  if (_configLoaded) _buildConfigSection(brown, brownLight),
+                  const SizedBox(height: 24),
+                  if (_configLoaded) ...[
+                    TabBar(
+                      controller: _tabController,
+                      labelColor: brown,
+                      unselectedLabelColor: brownLight,
+                      indicatorColor: const Color(0xFF8B4513),
+                      tabs: const [
+                        Tab(text: 'Configuration'),
+                        Tab(text: 'History'),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.6,
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          SingleChildScrollView(
+                            child: _buildConfigSection(brown, brownLight),
+                          ),
+                          _buildHistoryTab(brown, brownLight),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -455,10 +499,52 @@ class _PermissionPageState extends State<PermissionPage>
               _themeChip('parchment', 'Parchment', brown),
               const SizedBox(width: 8),
               _themeChip('silver', 'Silver', brown),
+              const SizedBox(width: 8),
+              _themeChip('blue', 'Blue', brown),
             ],
           ),
+          const SizedBox(height: 16),
+          _buildInteractionStyleRow(brown),
         ],
       ),
+    );
+  }
+
+  Widget _buildInteractionStyleRow(Color brown) {
+    return Row(
+      children: [
+        Text('Interaction', style: TextStyle(color: brown, fontSize: 14)),
+        const Spacer(),
+        ...[1, 2].map((style) {
+          final sel = _config.interactionStyle == style;
+          return Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: GestureDetector(
+              onTap: () {
+                _updateConfig(() => _config.interactionStyle = style);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: sel ? const Color(0xFF8B4513) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: sel ? const Color(0xFF8B4513) : const Color(0xFFCBB896),
+                  ),
+                ),
+                child: Text(
+                  'Style $style',
+                  style: TextStyle(
+                    color: sel ? Colors.white : brown,
+                    fontSize: 12,
+                    fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
     );
   }
 
@@ -649,5 +735,66 @@ class _PermissionPageState extends State<PermissionPage>
         ),
       ),
     );
+  }
+
+  Widget _buildHistoryTab(Color brown, Color brownLight) {
+    if (_history.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'No history yet.\nSelections made in the overlay will appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: brownLight, fontSize: 14),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8),
+      itemCount: _history.length,
+      itemBuilder: (context, index) {
+        final entry = _history[index];
+        final time = _formatTimestamp(entry.timestamp);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDD9B5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCBB896)),
+          ),
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.history, color: brownLight, size: 20),
+            title: Text(
+              entry.displayLabel,
+              style: TextStyle(color: brown, fontSize: 14),
+            ),
+            subtitle: Text(
+              time,
+              style: TextStyle(color: brownLight, fontSize: 11),
+            ),
+            trailing: IconButton(
+              icon: Icon(Icons.delete_outline, color: brownLight, size: 20),
+              onPressed: () async {
+                await _historyRepo.removeAt(index);
+                await _loadHistory();
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTimestamp(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.month}/${dt.day}/${dt.year}';
   }
 }

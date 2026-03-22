@@ -9,6 +9,7 @@ import '../services/config_service.dart';
 import '../theme/scroll_theme.dart';
 import '../theme/parchment_theme.dart';
 import '../theme/silver_theme.dart';
+import '../theme/blue_theme.dart';
 import 'collapsed_scroll.dart';
 import 'expanded_scroll.dart';
 
@@ -39,6 +40,14 @@ class _ScrollOverlayState extends State<ScrollOverlay>
   double _expandedX = 0;
   double _expandedY = 0;
 
+  /// Last selected indices — persist across expand/collapse cycles
+  int _lastBook = 0;
+  int _lastChapter = 0;
+  int _lastVerse = 0;
+
+  /// Current language — track to detect changes
+  String _currentLanguage = 'English';
+
   /// Internal compass size for expanded layout calculations
   int get _compassSize =>
       OverlayService.compassSize(_config.overlayScale);
@@ -47,9 +56,14 @@ class _ScrollOverlayState extends State<ScrollOverlay>
   int get _collapsedSize =>
       OverlayService.collapsedDisplaySize(_compassSize);
 
-  /// Expanded bar height — taller than compass to show 5 picker rows
-  int get _expandedHeight =>
-      (_compassSize * 5 / 3 * _config.heightScale).round();
+  /// Expanded bar height — Style 1: 5 rows, Style 2: 11 rows
+  int get _expandedHeight {
+    if (_config.interactionStyle == 2) {
+      final itemExtent = _compassSize / 3.0;
+      return (itemExtent * 11 * _config.heightScale).round();
+    }
+    return (_compassSize * 5 / 3 * _config.heightScale).round();
+  }
 
   @override
   void initState() {
@@ -75,7 +89,8 @@ class _ScrollOverlayState extends State<ScrollOverlay>
         intensity: _config.hapticIntensity,
       );
       _theme = _resolveTheme(_config.theme);
-      _books = await _bibleRepo.loadBooks();
+      _currentLanguage = _config.language;
+      _books = await _bibleRepo.loadBooksForLanguage(_currentLanguage);
     } catch (e) {
       _haptics = HapticService();
       _theme = ParchmentTheme();
@@ -112,6 +127,8 @@ class _ScrollOverlayState extends State<ScrollOverlay>
     switch (name) {
       case 'silver':
         return SilverTheme();
+      case 'blue':
+        return BlueTheme();
       default:
         return ParchmentTheme();
     }
@@ -238,17 +255,33 @@ class _ScrollOverlayState extends State<ScrollOverlay>
 
   void _onConfigChanged() {
     if (!mounted) return;
+    final languageChanged = _config.language != _currentLanguage;
     setState(() {
       _theme = _resolveTheme(_config.theme);
       _haptics.enabled = _config.hapticEnabled;
       _haptics.intensity = _config.hapticIntensity;
     });
+    if (languageChanged) {
+      _currentLanguage = _config.language;
+      _reloadBooks();
+    }
     if (_expanded) {
       _resizeExpanded();
     } else {
-      // Resize the collapsed window to match the new config-derived size
       _resizeCollapsed();
     }
+  }
+
+  Future<void> _reloadBooks() async {
+    try {
+      final books = await _bibleRepo.loadBooksForLanguage(_currentLanguage);
+      if (!mounted) return;
+      setState(() {
+        _books = books;
+        // Clamp selection to valid range
+        if (_lastBook >= _books.length) _lastBook = 0;
+      });
+    } catch (_) {}
   }
 
   Future<void> _resizeExpanded() async {
@@ -282,6 +315,7 @@ class _ScrollOverlayState extends State<ScrollOverlay>
       return CollapsedScroll(
         theme: _theme,
         onTap: _expand,
+        interactionStyle: _config.interactionStyle,
       );
     }
 
@@ -295,6 +329,14 @@ class _ScrollOverlayState extends State<ScrollOverlay>
         historyRepo: _historyRepo,
         onCollapse: _collapse,
         onConfigChanged: _onConfigChanged,
+        initialBook: _lastBook,
+        initialChapter: _lastChapter,
+        initialVerse: _lastVerse,
+        onSelectionChanged: (book, chapter, verse) {
+          _lastBook = book;
+          _lastChapter = chapter;
+          _lastVerse = verse;
+        },
       ),
     );
   }
