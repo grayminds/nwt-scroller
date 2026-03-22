@@ -84,8 +84,19 @@ class _PermissionPageState extends State<PermissionPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkPermission();
-      _checkOverlayStatus();
+      _checkPermissionAndStart();
+    }
+  }
+
+  Future<void> _checkPermissionAndStart() async {
+    await _checkPermission();
+    if (_permissionGranted) {
+      await _checkOverlayStatus();
+      if (!_overlayActive) {
+        await _startOverlay();
+      } else {
+        _pushConfigToOverlay();
+      }
     }
   }
 
@@ -138,7 +149,8 @@ class _PermissionPageState extends State<PermissionPage>
 
   Future<void> _startOverlay() async {
     await _config.save();
-    final size = OverlayService.compassSize(_config.fontSize, _config.overlayScale);
+    final cs = OverlayService.compassSize(_config.fontSize, _config.overlayScale);
+    final size = OverlayService.collapsedDisplaySize(cs);
     await OverlayService.showOverlay(size);
     // Position from main app (overlay engine can't reliably detect screen size)
     try {
@@ -300,14 +312,7 @@ class _PermissionPageState extends State<PermissionPage>
             ),
           ),
           const SizedBox(height: 16),
-          _buildDropdownRow(
-            label: 'Language',
-            value: 'English',
-            items: const ['English'],
-            enabled: false,
-            brown: brown,
-            brownLight: brownLight,
-          ),
+          _buildLanguageRow(brown),
           const SizedBox(height: 12),
           _buildDropdownRow(
             label: 'Bible',
@@ -355,6 +360,19 @@ class _PermissionPageState extends State<PermissionPage>
             displayValue: '${(_config.widthScale * 100).round()}%',
             onChanged: (v) {
               _updateConfig(() => _config.widthScale = v);
+            },
+            brown: brown,
+          ),
+          const SizedBox(height: 12),
+          _buildSliderRow(
+            label: 'Bar height',
+            value: _config.selectionBarHeight,
+            min: 0.5,
+            max: 2.0,
+            divisions: 15,
+            displayValue: '${(_config.selectionBarHeight * 100).round()}%',
+            onChanged: (v) {
+              _updateConfig(() => _config.selectionBarHeight = v);
             },
             brown: brown,
           ),
@@ -515,6 +533,36 @@ class _PermissionPageState extends State<PermissionPage>
           child: Text(displayValue,
               style: TextStyle(color: brown, fontSize: 13),
               textAlign: TextAlign.right),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLanguageRow(Color brown) {
+    return Row(
+      children: [
+        Text('Language', style: TextStyle(color: brown, fontSize: 14)),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCBB896)),
+          ),
+          child: DropdownButton<String>(
+            value: _config.language,
+            underline: const SizedBox.shrink(),
+            isDense: true,
+            style: TextStyle(color: brown, fontSize: 13),
+            dropdownColor: const Color(0xFFF5E6C8),
+            items: ConfigService.supportedLanguages.map((lang) {
+              return DropdownMenuItem(value: lang, child: Text(lang));
+            }).toList(),
+            onChanged: (v) {
+              if (v != null) _updateConfig(() => _config.language = v);
+            },
+          ),
         ),
       ],
     );

@@ -9,7 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_overlay_window: ^0.5.0
+  flutter_overlay_window:
+    path: plugins/flutter_overlay_window
   flutter_svg: ^2.2.2
   shared_preferences: ^2.2.0
   url_launcher: ^6.2.0

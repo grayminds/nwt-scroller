@@ -63,7 +63,6 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       OverlayService.compassSize(widget.config.fontSize, widget.config.overlayScale);
   double get _handleWidth => OverlayService.handleWidth(_compassSize);
   double get _itemExtent => _compassSize / 3.0;
-  int get _expandedHeight => (_compassSize * 5 / 3).round();
 
   @override
   void initState() {
@@ -170,32 +169,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     await LauncherService.launch(entry.reference);
   }
 
-  /// Compute the expanded bar width (matches scroll_overlay.dart logic)
-  double _computeExpandedWidth() {
-    final screenWidth = widget.config.screenWidth;
-    if (screenWidth <= 0) return 280;
-    final fs = widget.config.fontSize;
-    final scale = widget.config.overlayScale;
-    final hw = _handleWidth;
-    final handleTotal = hw * 2;
-    final maxBookChars = switch (widget.config.nameLength) {
-      NameLength.short => 3,
-      NameLength.medium => 7,
-      NameLength.long => 12,
-    };
-    final bookWidth = (maxBookChars * fs * 0.38).round();
-    final numWidth = (3 * fs * 0.38).round();
-    final widthScale = widget.config.widthScale;
-    final contentWidth = bookWidth + numWidth * 2 + 6;
-    final totalWidth = (contentWidth * scale * widthScale + handleTotal).round();
-    final maxWidth = (screenWidth * 0.9).round();
-    return totalWidth.clamp(120, maxWidth).toDouble();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final expandedWidth = _computeExpandedWidth();
-
     return SizedBox.expand(
       child: Stack(
         clipBehavior: Clip.none,
@@ -208,10 +183,6 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
               LeftHandle(
                 theme: widget.theme,
                 width: _handleWidth,
-                screenWidth: widget.config.screenWidth,
-                screenHeight: widget.config.screenHeight,
-                overlayWidth: expandedWidth,
-                overlayHeight: _expandedHeight.toDouble(),
                 onTap: widget.onCollapse,
                 onSwipeUp: _toggleHistory,
               ),
@@ -276,10 +247,10 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
 
     return Stack(
       children: [
-        // Selection row background — only the center band
+        // Selection row background — height controlled by config
         Center(
           child: Container(
-            height: ie,
+            height: ie * widget.config.selectionBarHeight,
             decoration: BoxDecoration(
               color: widget.theme.background.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(4),

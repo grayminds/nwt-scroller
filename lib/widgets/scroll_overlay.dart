@@ -39,12 +39,16 @@ class _ScrollOverlayState extends State<ScrollOverlay>
   double _expandedX = 0;
   double _expandedY = 0;
 
-  /// Unified compass size derived from config
-  int get _collapsedSize =>
+  /// Internal compass size for expanded layout calculations
+  int get _compassSize =>
       OverlayService.compassSize(_config.fontSize, _config.overlayScale);
 
+  /// Collapsed overlay display size — matches the visual compass in expanded handles
+  int get _collapsedSize =>
+      OverlayService.collapsedDisplaySize(_compassSize);
+
   /// Expanded bar height — taller than compass to show 5 picker rows
-  int get _expandedHeight => (_collapsedSize * 5 / 3).round();
+  int get _expandedHeight => (_compassSize * 5 / 3).round();
 
   @override
   void initState() {
@@ -116,7 +120,7 @@ class _ScrollOverlayState extends State<ScrollOverlay>
     final screenWidth = _config.screenWidth;
     final fs = _config.fontSize;
     final scale = _config.overlayScale;
-    final hw = OverlayService.handleWidth(_collapsedSize);
+    final hw = OverlayService.handleWidth(_compassSize);
     final handleTotal = hw * 2;
     final separatorWidth = 6;
 
@@ -176,6 +180,10 @@ class _ScrollOverlayState extends State<ScrollOverlay>
       _expandedX = newX;
       _expandedY = newY;
 
+      // Enable native drag for the left handle zone
+      final handleW = OverlayService.handleWidth(_compassSize);
+      await OverlayService.enableCustomDrag(handleW.round());
+
       if (!mounted) return;
       _animController.forward();
       setState(() => _expanded = true);
@@ -185,6 +193,8 @@ class _ScrollOverlayState extends State<ScrollOverlay>
         await OverlayService.moveOverlay(20, 200);
         _expandedX = 20;
         _expandedY = 200;
+        final handleW = OverlayService.handleWidth(_compassSize);
+        await OverlayService.enableCustomDrag(handleW.round());
         if (!mounted) return;
         _animController.forward();
         setState(() => _expanded = true);
@@ -193,6 +203,9 @@ class _ScrollOverlayState extends State<ScrollOverlay>
   }
 
   Future<void> _collapse() async {
+    // Disable native drag before collapsing (OS drag takes over in collapsed mode)
+    await OverlayService.disableCustomDrag();
+
     // Collapse to the left knob position: the collapsed compass appears
     // where the left handle was in the expanded bar.
     try {

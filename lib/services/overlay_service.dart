@@ -7,11 +7,16 @@ class OverlayService {
     return (fontSize * 1.1 * 3.0 * overlayScale).round().clamp(36, 160);
   }
 
-  /// Handle width = exactly half the compass size.
-  /// The half SVGs use viewBox 24x48 (half of 48x48), so at this width
-  /// the two halves together equal exactly the collapsed compass width.
+  /// Handle width = 1/3 of compass size for compact handles.
   static double handleWidth(int compassSize) {
     return compassSize / 3.0;
+  }
+
+  /// Collapsed overlay size — matches the visual compass size shown in
+  /// expanded handles. Each half-SVG (24×48 viewBox, aspect 1:2) at
+  /// handleWidth renders the compass at 2×handleWidth = 2/3 compassSize.
+  static int collapsedDisplaySize(int compassSize) {
+    return (compassSize * 2 / 3).round().clamp(24, 106);
   }
 
   static Future<bool> requestPermission() async {
@@ -70,5 +75,15 @@ class OverlayService {
 
   static Stream<dynamic> get overlayListener {
     return FlutterOverlayWindow.overlayListener;
+  }
+
+  /// Enable native drag for the left zone of the expanded overlay.
+  /// Uses screen-space coordinates to avoid the pointer feedback loop.
+  static Future<void> enableCustomDrag(int zoneWidthPx) async {
+    await FlutterOverlayWindow.setCustomDrag(true, zoneWidthPx);
+  }
+
+  static Future<void> disableCustomDrag() async {
+    await FlutterOverlayWindow.setCustomDrag(false, 0);
   }
 }
