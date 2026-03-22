@@ -11,6 +11,7 @@ class ConfigService {
   static const _themeKey = 'theme';
   static const _overlayScaleKey = 'overlay_scale';
   static const _fontSizeKey = 'font_size';
+  static const _widthScaleKey = 'width_scale';
 
   bool hapticEnabled = true;
   HapticIntensity hapticIntensity = HapticIntensity.light;
@@ -18,6 +19,9 @@ class ConfigService {
   String theme = 'parchment';
   double overlayScale = 1.0;
   double fontSize = 14.0;
+  double widthScale = 1.0;
+  double screenWidth = 0;
+  double screenHeight = 0;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,7 +35,8 @@ class ConfigService {
     nameLength = NameLength.values[nlIdx];
     theme = prefs.getString(_themeKey) ?? 'parchment';
     overlayScale = (prefs.getDouble(_overlayScaleKey) ?? 1.0).clamp(0.8, 1.5);
-    fontSize = (prefs.getDouble(_fontSizeKey) ?? 14.0).clamp(10.0, 20.0);
+    fontSize = (prefs.getDouble(_fontSizeKey) ?? 14.0).clamp(10.0, 32.0);
+    widthScale = (prefs.getDouble(_widthScaleKey) ?? 1.0).clamp(0.5, 2.0);
   }
 
   Future<void> save() async {
@@ -42,6 +47,7 @@ class ConfigService {
     await prefs.setString(_themeKey, theme);
     await prefs.setDouble(_overlayScaleKey, overlayScale);
     await prefs.setDouble(_fontSizeKey, fontSize);
+    await prefs.setDouble(_widthScaleKey, widthScale);
   }
 
   Map<String, dynamic> toMap() {
@@ -53,6 +59,9 @@ class ConfigService {
       'theme': theme,
       'overlayScale': overlayScale,
       'fontSize': fontSize,
+      'widthScale': widthScale,
+      'screenWidth': screenWidth,
+      'screenHeight': screenHeight,
     };
   }
 
@@ -68,6 +77,11 @@ class ConfigService {
     overlayScale =
         (map['overlayScale'] as num?)?.toDouble() ?? overlayScale;
     fontSize = (map['fontSize'] as num?)?.toDouble() ?? fontSize;
+    widthScale = (map['widthScale'] as num?)?.toDouble() ?? widthScale;
+    final sw = (map['screenWidth'] as num?)?.toDouble();
+    if (sw != null && sw > 0) screenWidth = sw;
+    final sh = (map['screenHeight'] as num?)?.toDouble();
+    if (sh != null && sh > 0) screenHeight = sh;
   }
 
   Future<void> setHapticEnabled(bool value) async {
@@ -96,7 +110,12 @@ class ConfigService {
   }
 
   Future<void> setFontSize(double value) async {
-    fontSize = value.clamp(10.0, 20.0);
+    fontSize = value.clamp(10.0, 32.0);
+    await save();
+  }
+
+  Future<void> setWidthScale(double value) async {
+    widthScale = value.clamp(0.5, 2.0);
     await save();
   }
 }

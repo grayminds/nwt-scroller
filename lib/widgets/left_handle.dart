@@ -4,11 +4,14 @@ import '../services/overlay_service.dart';
 import '../theme/scroll_theme.dart';
 
 /// Left scroll handle — tap to collapse, drag to move overlay, swipe up for history.
-/// Uses raw Listener instead of GestureDetector to avoid gesture arena delays
-/// that cause jittery movement.
+/// Uses raw Listener instead of GestureDetector to avoid gesture arena delays.
 class LeftHandle extends StatefulWidget {
   final ScrollTheme theme;
   final double width;
+  final double screenWidth;
+  final double screenHeight;
+  final double overlayWidth;
+  final double overlayHeight;
   final VoidCallback onTap;
   final VoidCallback onSwipeUp;
 
@@ -16,6 +19,10 @@ class LeftHandle extends StatefulWidget {
     super.key,
     required this.theme,
     required this.width,
+    required this.screenWidth,
+    required this.screenHeight,
+    required this.overlayWidth,
+    required this.overlayHeight,
     required this.onTap,
     required this.onSwipeUp,
   });
@@ -25,38 +32,28 @@ class LeftHandle extends StatefulWidget {
 }
 
 class _LeftHandleState extends State<LeftHandle> {
-  // Overlay position cached eagerly; refreshed after each drag ends
-  double _cachedOverlayX = 0;
-  double _cachedOverlayY = 0;
-
-  // Drag-start snapshot — frozen for the entire drag gesture
+  // Drag-start snapshot — re-anchored when each move completes
   double _dragStartOverlayX = 0;
   double _dragStartOverlayY = 0;
   Offset? _pointerStartLocal;
   DateTime? _pointerDownTime;
   bool _isDragging = false;
-
-  // Accumulated overlay displacement — compensates for coordinate shift
-  double _displacementX = 0;
-  double _displacementY = 0;
+  bool _positionReady = false;
 
   // Throttle: track latest desired position, send when previous completes
   bool _moveInFlight = false;
   double? _pendingX;
   double? _pendingY;
 
-  @override
-  void initState() {
-    super.initState();
-    _cachePosition();
+  /// Clamp position to keep overlay fully on screen.
+  double _clampX(double x) {
+    if (widget.screenWidth <= 0) return x;
+    return x.clamp(0.0, (widget.screenWidth - widget.overlayWidth).clamp(0.0, widget.screenWidth));
   }
 
-  Future<void> _cachePosition() async {
-    try {
-      final pos = await OverlayService.getPosition();
-      _cachedOverlayX = pos.x;
-      _cachedOverlayY = pos.y;
-    } catch (_) {}
+  double _clampY(double y) {
+    if (widget.screenHeight <= 0) return y;
+    return y.clamp(0.0, (widget.screenHeight - widget.overlayHeight).clamp(0.0, widget.screenHeight));
   }
 
   void _sendMove(double x, double y) {
@@ -67,6 +64,11 @@ class _LeftHandleState extends State<LeftHandle> {
     }
     _moveInFlight = true;
     OverlayService.moveOverlay(x, y).then((_) {
+      // Re-anchor: overlay is now at (x, y).
+      // Keep _pointerStartLocal frozen — only update _dragStart.
+      // This correctly compensates for the coordinate shift without amplification.
+      _dragStartOverlayX = x;
+      _dragStartOverlayY = y;
       _moveInFlight = false;
       if (_pendingX != null && _pendingY != null) {
         final px = _pendingX!;
@@ -86,50 +88,44 @@ class _LeftHandleState extends State<LeftHandle> {
         _pointerDownTime = DateTime.now();
         _pointerStartLocal = event.position;
         _isDragging = false;
+        _positionReady = false;
         _pendingX = null;
         _pendingY = null;
-        _displacementX = 0;
-        _displacementY = 0;
-        // Snapshot the cached position — frozen for the entire drag
-        _dragStartOverlayX = _cachedOverlayX;
-        _dragStartOverlayY = _cachedOverlayY;
+        // Query fresh position — don't rely on stale cache
+        OverlayService.getPosition().then((pos) {
+          _dragStartOverlayX = pos.x;
+          _dragStartOverlayY = pos.y;
+          _positionReady = true;
+        }).catchError((_) {
+          _positionReady = false;
+        });
       },
       onPointerMove: (event) {
-        if (_pointerStartLocal == null) return;
+        if (_pointerStartLocal == null || !_positionReady) return;
 
-        // Compensate for overlay coordinate shift: local coords shift by
-        // -displacement when the overlay moves, so add displacement back.
-        final screenDx =
-            event.position.dx - _pointerStartLocal!.dx + _displacementX;
-        final screenDy =
-            event.position.dy - _pointerStartLocal!.dy + _displacementY;
+        final dx = event.position.dx - _pointerStartLocal!.dx;
+        final dy = event.position.dy - _pointerStartLocal!.dy;
 
-        if (!_isDragging && (screenDx.abs() + screenDy.abs()) > 8) {
+        if (!_isDragging && (dx.abs() + dy.abs()) > 8) {
           _isDragging = true;
         }
         if (_isDragging) {
-          _displacementX = screenDx;
-          _displacementY = screenDy;
-          _sendMove(
-              _dragStartOverlayX + screenDx, _dragStartOverlayY + screenDy);
+          final targetX = _clampX(_dragStartOverlayX + dx);
+          final targetY = _clampY(_dragStartOverlayY + dy);
+          _sendMove(targetX, targetY);
         }
       },
       onPointerUp: (event) {
         if (!_isDragging && _pointerDownTime != null) {
           final elapsed = DateTime.now().difference(_pointerDownTime!);
           if (elapsed.inMilliseconds < 350) {
-            final dy =
-                event.position.dy - (_pointerStartLocal?.dy ?? 0) + _displacementY;
+            final dy = event.position.dy - (_pointerStartLocal?.dy ?? 0);
             if (dy < -30) {
               widget.onSwipeUp();
             } else {
               widget.onTap();
             }
           }
-        }
-        // After drag ends, refresh cache with actual current position
-        if (_isDragging) {
-          _cachePosition();
         }
         _pointerStartLocal = null;
         _pointerDownTime = null;

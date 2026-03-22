@@ -52,15 +52,7 @@ class _ChapterPickerState extends State<ChapterPicker> {
         itemExtent: widget.itemExtent,
         diameterRatio: 1.8,
         squeeze: 0.9,
-        selectionOverlay: Container(
-          decoration: BoxDecoration(
-            color: widget.theme.pickerHighlight,
-            border: Border.symmetric(
-              horizontal:
-                  BorderSide(color: widget.theme.divider, width: 0.5),
-            ),
-          ),
-        ),
+        selectionOverlay: const SizedBox.shrink(),
         onSelectedItemChanged: widget.onSelectedItemChanged,
         children: List.generate(widget.chapterCount, (i) {
           return Center(

@@ -44,7 +44,28 @@ class NwtVibrationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     result.success(false)
                 }
             }
+            "openMainApp" -> {
+                val opened = doOpenMainApp()
+                result.success(opened)
+            }
             else -> result.notImplemented()
+        }
+    }
+
+    private fun doOpenMainApp(): Boolean {
+        val ctx = context ?: return false
+        return try {
+            val pm = ctx.packageManager
+            val intent = pm.getLaunchIntentForPackage(ctx.packageName)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                ctx.startActivity(intent)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 

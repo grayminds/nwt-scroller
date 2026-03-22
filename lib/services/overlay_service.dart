@@ -4,14 +4,14 @@ class OverlayService {
   /// Compute the unified compass display size from config values.
   /// This is THE single source of truth for all overlay sizing.
   static int compassSize(double fontSize, double overlayScale) {
-    return (fontSize * 1.1 * 3.0 * overlayScale).round().clamp(36, 96);
+    return (fontSize * 1.1 * 3.0 * overlayScale).round().clamp(36, 160);
   }
 
   /// Handle width = exactly half the compass size.
   /// The half SVGs use viewBox 24x48 (half of 48x48), so at this width
   /// the two halves together equal exactly the collapsed compass width.
   static double handleWidth(int compassSize) {
-    return compassSize / 2.0;
+    return compassSize / 3.0;
   }
 
   static Future<bool> requestPermission() async {

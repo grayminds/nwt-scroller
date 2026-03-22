@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'services/overlay_service.dart';
 import 'services/screen_service.dart';
 import 'services/config_service.dart';
@@ -68,9 +70,8 @@ class _PermissionPageState extends State<PermissionPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkPermission();
-    _loadConfig();
     _listenForOverlayData();
+    _initAndAutoStart();
   }
 
   @override
@@ -88,7 +89,20 @@ class _PermissionPageState extends State<PermissionPage>
     }
   }
 
-  /// Listen for messages from the overlay.
+  Future<void> _initAndAutoStart() async {
+    await _loadConfig();
+    await _checkPermission();
+    if (_permissionGranted) {
+      await _checkOverlayStatus();
+      if (!_overlayActive) {
+        await _startOverlay();
+      } else {
+        // Already running — push latest config
+        _pushConfigToOverlay();
+      }
+    }
+  }
+
   void _listenForOverlayData() {
     _overlayDataSub =
         FlutterOverlayWindow.overlayListener.listen((data) {
@@ -98,6 +112,14 @@ class _PermissionPageState extends State<PermissionPage>
 
   Future<void> _loadConfig() async {
     await _config.load();
+    // Populate screen dimensions from main app context
+    try {
+      final screen = ScreenService.getScreenSize();
+      if (screen.width > 200 && screen.height > 200) {
+        _config.screenWidth = screen.width;
+        _config.screenHeight = screen.height;
+      }
+    } catch (_) {}
     if (!mounted) return;
     setState(() => _configLoaded = true);
   }
@@ -120,10 +142,9 @@ class _PermissionPageState extends State<PermissionPage>
     await OverlayService.showOverlay(size);
     // Position from main app (overlay engine can't reliably detect screen size)
     try {
-      final screen = ScreenService.getScreenSize();
-      if (screen.width > 200 && screen.height > 200) {
+      if (_config.screenWidth > 200 && _config.screenHeight > 200) {
         await OverlayService.setDefaultPosition(
-            screen.width, screen.height, size);
+            _config.screenWidth, _config.screenHeight, size);
       }
     } catch (_) {}
     if (!mounted) return;
@@ -132,10 +153,11 @@ class _PermissionPageState extends State<PermissionPage>
     Future.delayed(const Duration(milliseconds: 500), _pushConfigToOverlay);
   }
 
-  Future<void> _stopOverlay() async {
-    await OverlayService.closeOverlay();
-    if (!mounted) return;
-    setState(() => _overlayActive = false);
+  Future<void> _closeApp() async {
+    try {
+      await OverlayService.closeOverlay();
+    } catch (_) {}
+    SystemNavigator.pop();
   }
 
   /// Push current config to overlay via data sharing.
@@ -169,10 +191,13 @@ class _PermissionPageState extends State<PermissionPage>
               child: Column(
                 children: [
                   const SizedBox(height: 24),
-                  Icon(
-                    Icons.menu_book_rounded,
-                    size: 80,
-                    color: brown,
+                  SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: SvgPicture.asset(
+                      'assets/svg/compass_rose.svg',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
@@ -197,7 +222,12 @@ class _PermissionPageState extends State<PermissionPage>
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
-                      onPressed: _checkPermission,
+                      onPressed: () async {
+                        await _checkPermission();
+                        if (_permissionGranted && !_overlayActive) {
+                          _startOverlay();
+                        }
+                      },
                       icon: const Icon(Icons.security),
                       label: const Text('Grant Permission'),
                       style: ElevatedButton.styleFrom(
@@ -208,41 +238,36 @@ class _PermissionPageState extends State<PermissionPage>
                       ),
                     ),
                   ] else ...[
-                    Icon(Icons.check_circle,
-                        color: Colors.green.shade700, size: 32),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Permission granted',
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.w500,
+                    if (_overlayActive) ...[
+                      Icon(Icons.check_circle,
+                          color: Colors.green.shade700, size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Overlay is running',
+                        style: TextStyle(
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
+                    ],
                     ElevatedButton.icon(
-                      onPressed:
-                          _overlayActive ? _stopOverlay : _startOverlay,
-                      icon: Icon(
-                          _overlayActive ? Icons.stop : Icons.play_arrow),
-                      label: Text(
-                          _overlayActive ? 'Stop Overlay' : 'Start Overlay'),
+                      onPressed: _closeApp,
+                      icon: const Icon(Icons.close),
+                      label: const Text('Close App'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _overlayActive
-                            ? Colors.red.shade700
-                            : const Color(0xFF8B4513),
+                        backgroundColor: const Color(0xFF8B6F47),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 32, vertical: 16),
                       ),
                     ),
-                    if (_overlayActive) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'The scroll overlay is active.\nYou can minimize this app.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: brownLight),
-                      ),
-                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'The overlay will keep running after closing.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: brownLight),
+                    ),
                   ],
                   const SizedBox(height: 32),
                   if (_configLoaded) _buildConfigSection(brown, brownLight),
@@ -312,11 +337,24 @@ class _PermissionPageState extends State<PermissionPage>
             label: 'Font size',
             value: _config.fontSize,
             min: 10,
-            max: 20,
-            divisions: 10,
+            max: 32,
+            divisions: 22,
             displayValue: '${_config.fontSize.round()}',
             onChanged: (v) {
               _updateConfig(() => _config.fontSize = v);
+            },
+            brown: brown,
+          ),
+          const SizedBox(height: 12),
+          _buildSliderRow(
+            label: 'Width scale',
+            value: _config.widthScale,
+            min: 0.5,
+            max: 2.0,
+            divisions: 15,
+            displayValue: '${(_config.widthScale * 100).round()}%',
+            onChanged: (v) {
+              _updateConfig(() => _config.widthScale = v);
             },
             brown: brown,
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nwt_vibration/nwt_vibration.dart';
 import '../models/bible_data.dart';
 import '../models/bible_reference.dart';
 import '../models/history_entry.dart';
@@ -49,7 +50,6 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   int _selectedVerse = 0;
 
   bool _showHistory = false;
-  bool _showSettings = false;
   List<HistoryEntry> _history = [];
 
   int _chapterPickerKey = 0;
@@ -63,6 +63,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       OverlayService.compassSize(widget.config.fontSize, widget.config.overlayScale);
   double get _handleWidth => OverlayService.handleWidth(_compassSize);
   double get _itemExtent => _compassSize / 3.0;
+  int get _expandedHeight => (_compassSize * 5 / 3).round();
 
   @override
   void initState() {
@@ -160,11 +161,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     setState(() => _showHistory = !_showHistory);
   }
 
-  void _toggleSettings() {
-    setState(() {
-      _showSettings = !_showSettings;
-      if (_showSettings) _showHistory = false;
-    });
+  void _openConfigPage() {
+    NwtVibration.openMainApp();
   }
 
   Future<void> _onHistoryEntryTap(HistoryEntry entry) async {
@@ -172,8 +170,32 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     await LauncherService.launch(entry.reference);
   }
 
+  /// Compute the expanded bar width (matches scroll_overlay.dart logic)
+  double _computeExpandedWidth() {
+    final screenWidth = widget.config.screenWidth;
+    if (screenWidth <= 0) return 280;
+    final fs = widget.config.fontSize;
+    final scale = widget.config.overlayScale;
+    final hw = _handleWidth;
+    final handleTotal = hw * 2;
+    final maxBookChars = switch (widget.config.nameLength) {
+      NameLength.short => 3,
+      NameLength.medium => 7,
+      NameLength.long => 12,
+    };
+    final bookWidth = (maxBookChars * fs * 0.38).round();
+    final numWidth = (3 * fs * 0.38).round();
+    final widthScale = widget.config.widthScale;
+    final contentWidth = bookWidth + numWidth * 2 + 6;
+    final totalWidth = (contentWidth * scale * widthScale + handleTotal).round();
+    final maxWidth = (screenWidth * 0.9).round();
+    return totalWidth.clamp(120, maxWidth).toDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final expandedWidth = _computeExpandedWidth();
+
     return SizedBox.expand(
       child: Stack(
         clipBehavior: Clip.none,
@@ -186,40 +208,22 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
               LeftHandle(
                 theme: widget.theme,
                 width: _handleWidth,
+                screenWidth: widget.config.screenWidth,
+                screenHeight: widget.config.screenHeight,
+                overlayWidth: expandedWidth,
+                overlayHeight: _expandedHeight.toDouble(),
                 onTap: widget.onCollapse,
                 onSwipeUp: _toggleHistory,
               ),
-              // Tube body — semi-transparent with contrast trace border
+              // Tube body — transparent; only selection row has background
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        widget.theme.background.withValues(alpha: 0.1),
-                        widget.theme.background.withValues(alpha: 0.75),
-                        widget.theme.background.withValues(alpha: 0.75),
-                        widget.theme.background.withValues(alpha: 0.1),
-                      ],
-                      stops: const [0.0, 0.25, 0.75, 1.0],
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: widget.theme.divider.withValues(alpha: 0.5),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: _showSettings
-                      ? _buildSettingsBody()
-                      : _buildPickerBody(),
-                ),
+                child: _buildPickerBody(),
               ),
-              // Right handle (right half of compass rose)
+              // Right handle — opens config page
               RightHandle(
                 theme: widget.theme,
                 width: _handleWidth,
-                onTap: _toggleSettings,
+                onTap: _openConfigPage,
               ),
             ],
           ),
@@ -241,9 +245,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   }
 
   /// Wraps a picker with top/bottom fade gradients so non-selected rows
-  /// are very transparent — keeps the overlay subtle.
-  /// Gradient fade: edges softly transparent, center (selection) fully visible.
-  /// Adjacent rows clearly readable at ~65% opacity.
+  /// fade out — keeps the overlay subtle.
   Widget _fadedPicker(Widget picker) {
     return ShaderMask(
       shaderCallback: (bounds) {
@@ -272,253 +274,92 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     final ie = _itemExtent;
     final fs = widget.config.fontSize;
 
-    return Row(
+    return Stack(
       children: [
-        // Book picker — flex 5
-        Expanded(
-          flex: 5,
-          child: _fadedPicker(
-            BookPicker(
-              books: widget.books,
-              controller: _bookController,
-              nameLength: widget.config.nameLength,
-              fontSize: fs,
-              itemExtent: ie,
-              theme: widget.theme,
-              onSelectedItemChanged: _onBookChanged,
-              onTap: _onBookTap,
-            ),
-          ),
-        ),
-        Container(
-          width: 1,
-          height: ie * 0.8,
-          color: widget.theme.divider.withValues(alpha: 0.3),
-        ),
-        // Chapter picker — flex 2
-        Expanded(
-          flex: 2,
-          child: _fadedPicker(
-            ChapterPicker(
-              key: ValueKey('ch_$_chapterPickerKey'),
-              chapterCount: _chapterCount,
-              controller: _chapterController,
-              fontSize: fs,
-              itemExtent: ie,
-              theme: widget.theme,
-              onSelectedItemChanged: _onChapterChanged,
-              onTap: _onChapterTap,
-            ),
-          ),
-        ),
-        // Colon separator
-        Text(
-          ':',
-          style: TextStyle(
-            color: widget.theme.textSecondary.withValues(alpha: 0.7),
-            fontSize: fs - 1,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        // Verse picker — flex 2
-        Expanded(
-          flex: 2,
-          child: _fadedPicker(
-            VersePicker(
-              key: ValueKey('vs_$_versePickerKey'),
-              verseCount: _verseCount,
-              controller: _verseController,
-              fontSize: fs,
-              itemExtent: ie,
-              theme: widget.theme,
-              onSelectedItemChanged: _onVerseChanged,
-              onTap: _onVerseTap,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsBody() {
-    final t = widget.theme;
-    const brassColor = Color(0xFFD4A056);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Row(
-        children: [
-          // Left column: toggles
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Name length: S / M / L
-                Row(
-                  children: [
-                    Text('Names', style: TextStyle(color: t.textPrimary, fontSize: 10)),
-                    const SizedBox(width: 4),
-                    ...NameLength.values.map((nl) {
-                      final sel = widget.config.nameLength == nl;
-                      final label = nl.name[0].toUpperCase();
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 3),
-                        child: GestureDetector(
-                          onTap: () {
-                            widget.config.setNameLength(nl);
-                            widget.onConfigChanged();
-                            setState(() {});
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: sel ? brassColor.withValues(alpha: 0.4) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(3),
-                              border: Border.all(
-                                color: sel ? brassColor : t.divider.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Text(label,
-                              style: TextStyle(color: t.textPrimary, fontSize: 10,
-                                fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
+        // Selection row background — only the center band
+        Center(
+          child: Container(
+            height: ie,
+            decoration: BoxDecoration(
+              color: widget.theme.background.withValues(alpha: 0.75),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.symmetric(
+                horizontal: BorderSide(
+                  color: widget.theme.divider.withValues(alpha: 0.5),
+                  width: 0.8,
                 ),
-                const SizedBox(height: 2),
-                _settingToggle(
-                  'Haptics',
-                  widget.config.hapticEnabled,
-                  (v) {
-                    widget.config.setHapticEnabled(v);
-                    widget.onConfigChanged();
-                    setState(() {});
-                  },
-                  t,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Right column: intensity + theme
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.config.hapticEnabled)
-                  Row(
-                    children: HapticIntensity.values.map((h) {
-                      final sel = widget.config.hapticIntensity == h;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: GestureDetector(
-                          onTap: () {
-                            widget.config.setHapticIntensity(h);
-                            widget.onConfigChanged();
-                            setState(() {});
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: sel
-                                  ? brassColor.withValues(alpha: 0.4)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: sel
-                                    ? brassColor
-                                    : t.divider.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Text(
-                              h.name[0].toUpperCase(),
-                              style: TextStyle(
-                                color: t.textPrimary,
-                                fontSize: 10,
-                                fontWeight:
-                                    sel ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                if (!widget.config.hapticEnabled) const SizedBox(height: 20),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _themeChip('parchment', 'Light', t, brassColor),
-                    const SizedBox(width: 4),
-                    _themeChip('silver', 'Dark', t, brassColor),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _settingToggle(
-      String label, bool value, ValueChanged<bool> onChanged, ScrollTheme t) {
-    return SizedBox(
-      height: 24,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(color: t.textPrimary, fontSize: 11)),
-          const SizedBox(width: 4),
-          SizedBox(
-            width: 32,
-            height: 18,
-            child: FittedBox(
-              child: Switch(
-                value: value,
-                onChanged: onChanged,
-                activeColor: const Color(0xFFD4A056),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _themeChip(
-      String name, String label, ScrollTheme t, Color brassColor) {
-    final sel = widget.config.theme == name;
-    return GestureDetector(
-      onTap: () {
-        widget.config.setTheme(name);
-        widget.onConfigChanged();
-        setState(() {});
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: sel ? brassColor.withValues(alpha: 0.35) : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: sel ? brassColor : t.divider.withValues(alpha: 0.5),
-          ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: t.textPrimary,
-            fontSize: 10,
-            fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-          ),
+        // Pickers on top
+        Row(
+          children: [
+            // Book picker — flex 5
+            Expanded(
+              flex: 5,
+              child: _fadedPicker(
+                BookPicker(
+                  books: widget.books,
+                  controller: _bookController,
+                  nameLength: widget.config.nameLength,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onBookChanged,
+                  onTap: _onBookTap,
+                ),
+              ),
+            ),
+            Container(
+              width: 1,
+              height: ie * 0.8,
+              color: widget.theme.divider.withValues(alpha: 0.3),
+            ),
+            // Chapter picker — flex 2
+            Expanded(
+              flex: 2,
+              child: _fadedPicker(
+                ChapterPicker(
+                  key: ValueKey('ch_$_chapterPickerKey'),
+                  chapterCount: _chapterCount,
+                  controller: _chapterController,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onChapterChanged,
+                  onTap: _onChapterTap,
+                ),
+              ),
+            ),
+            // Colon separator
+            Text(
+              ':',
+              style: TextStyle(
+                color: widget.theme.textSecondary.withValues(alpha: 0.7),
+                fontSize: fs - 1,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            // Verse picker — flex 2
+            Expanded(
+              flex: 2,
+              child: _fadedPicker(
+                VersePicker(
+                  key: ValueKey('vs_$_versePickerKey'),
+                  verseCount: _verseCount,
+                  controller: _verseController,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onVerseChanged,
+                  onTap: _onVerseTap,
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
+      ],
     );
   }
 }

@@ -10,10 +10,11 @@ NWT Scroller is an Android overlay application built with Flutter that provides 
 
 ### FR-1: Overlay Lifecycle
 
-- The main app provides a Start/Stop button to show or hide the overlay.
-- The overlay requires `SYSTEM_ALERT_WINDOW` permission; the app must request it before allowing overlay activation.
+- Launching the app auto-starts the overlay in its collapsed state. There is no manual "Start Overlay" button.
+- The overlay requires `SYSTEM_ALERT_WINDOW` permission; the app requests it on launch and auto-starts the overlay once granted.
 - The overlay runs in a separate Flutter engine entry point (`overlayMain()`), independent of the main app's lifecycle.
-- The main app can be minimized while the overlay remains active.
+- The main app shows a "Close App" button; closing the app does NOT stop the overlay — it continues running.
+- The main app serves as the configuration page, opened by tapping the right compass knob in the expanded overlay.
 
 ### FR-2: Collapsed State (Compass Rose)
 
@@ -40,6 +41,7 @@ NWT Scroller is an Android overlay application built with Flutter that provides 
 - **Verse picker**: shows verses 1–N for the selected book+chapter. Resets to verse 1 when the book or chapter changes.
 - Pickers use `CupertinoPicker` with `diameterRatio: 1.8` and `squeeze: 0.9` to show multiple items above and below the selection.
 - A fade gradient (shader mask) makes edge items progressively transparent, with the center selection fully opaque.
+- **Only the center selection row** has a visible background highlight. The rows above and below the selection must have no background — they show text only (faded) over transparency.
 - Each picker provides haptic feedback on scroll and a distinct haptic on tap.
 - Tapping a picker item launches the corresponding reference:
   - Book tap → opens the book's landing page.
@@ -76,16 +78,11 @@ NWT Scroller is an Android overlay application built with Flutter that provides 
 - A popup, triggered by swiping up on the left handle, shows recent entries.
 - Tapping a history entry re-launches that reference.
 
-### FR-9: Settings Panel
+### FR-9: Right Knob — Open Configuration
 
-- Tapping the right handle toggles an inline settings panel within the expanded bar.
-- Settings include:
-  - **Name Length**: Short / Medium / Long (controls book name display in the picker).
-  - **Haptic Feedback**: on/off toggle.
-  - **Haptic Intensity**: Light / Medium / Heavy (shown only when haptics are enabled).
-  - **Theme**: Parchment (light) / Silver (dark).
-- Settings changes apply immediately and trigger a config-changed callback that updates theme, haptics, and resizes the overlay if needed.
-- The settings body must fit within the expanded bar height without overflow.
+- Tapping the right handle in the expanded overlay opens the main app's configuration page (brings the app to the foreground via `openMainApp` platform channel).
+- The main app provides the full settings UI: name length, overlay scale, font size, haptic feedback, haptic intensity, and theme.
+- Settings changes apply immediately and are pushed to the overlay via `shareData`.
 
 ### FR-10: Configuration Propagation
 
@@ -115,9 +112,13 @@ NWT Scroller is an Android overlay application built with Flutter that provides 
 - The formula `(fontSize × 1.1 × 3.0 × overlayScale).round().clamp(36, 96)` is the single source of truth.
 - Handle width = `compassSize / 2` (each half-SVG is exactly half the compass).
 
-### NFR-3: Smooth Drag (No Jitter)
+### NFR-3: Smooth Drag (No Jitter or Amplification)
 
-- Custom drag in the expanded state must not jitter or oscillate. The coordinate feedback loop (overlay moves → pointer coordinates shift → computed delta is wrong → overlay bounces back) must be broken by tracking accumulated displacement and compensating in the delta calculation.
+- Custom drag in the expanded state must not jitter, oscillate, or amplify movement.
+- The coordinate feedback loop (overlay moves → pointer coordinates shift → computed delta is wrong) is solved by re-anchoring `_dragStartOverlay` to the completed move position after each move, while keeping the pointer start position frozen. This avoids both jitter (from the original approach) and amplification (from displacement compensation).
+- The overlay must NEVER exit the visible screen area during drag. Positions are clamped to `[0, screenWidth - overlayWidth]` horizontally and `[0, screenHeight - overlayHeight]` vertically.
+- On screen rotation, the overlay must adjust to stay within the new screen bounds.
+- Screen dimensions are passed from the main app to the overlay via config, since `ScreenService` is unreliable in the overlay engine.
 
 ### NFR-4: Visual Design — Compass Rose SVG
 

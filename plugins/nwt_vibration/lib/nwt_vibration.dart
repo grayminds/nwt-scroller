@@ -23,4 +23,15 @@ class NwtVibration {
       return false;
     }
   }
+
+  /// Bring the main app activity to the foreground.
+  /// Works from overlay Service context.
+  static Future<bool> openMainApp() async {
+    try {
+      final result = await _channel.invokeMethod('openMainApp');
+      return result == true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

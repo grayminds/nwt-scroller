@@ -4,7 +4,6 @@ import '../models/bible_data.dart';
 import '../data/bible_repository.dart';
 import '../data/history_repository.dart';
 import '../services/overlay_service.dart';
-import '../services/screen_service.dart';
 import '../services/haptic_service.dart';
 import '../services/config_service.dart';
 import '../theme/scroll_theme.dart';
@@ -113,7 +112,8 @@ class _ScrollOverlayState extends State<ScrollOverlay>
     }
   }
 
-  int _computeExpandedWidth(double screenWidth) {
+  int _computeExpandedWidth() {
+    final screenWidth = _config.screenWidth;
     final fs = _config.fontSize;
     final scale = _config.overlayScale;
     final hw = OverlayService.handleWidth(_collapsedSize);
@@ -129,29 +129,28 @@ class _ScrollOverlayState extends State<ScrollOverlay>
     final numWidth = (3 * fs * 0.38).round();
 
     final contentWidth = bookWidth + numWidth * 2 + separatorWidth;
-    // Scale only the content; handles already derive from scaled _collapsedSize
-    final totalWidth = (contentWidth * scale + handleTotal).round();
+    final widthScale = _config.widthScale;
+    final totalWidth = (contentWidth * scale * widthScale + handleTotal).round();
 
-    final maxWidth = (screenWidth * 0.9).round();
+    final maxWidth = screenWidth > 0 ? (screenWidth * 0.9).round() : 400;
     return totalWidth.clamp(120, maxWidth);
   }
 
   Future<void> _expand() async {
     try {
-      final screen = ScreenService.getScreenSize();
-      final screenWidth = screen.width;
-      final screenHeight = screen.height;
+      final screenWidth = _config.screenWidth;
+      final screenHeight = _config.screenHeight;
 
       final pos = await OverlayService.getPosition();
       if (!mounted) return;
 
       final cs = _collapsedSize;
-      final expandedWidth = _computeExpandedWidth(screenWidth);
+      final expandedWidth = _computeExpandedWidth();
       final expandedHeight = _expandedHeight;
 
       final collapsedCenterX = pos.x + cs / 2;
       final collapsedCenterY = pos.y + cs / 2;
-      final third = screenWidth / 3;
+      final third = screenWidth > 0 ? screenWidth / 3 : 150.0;
 
       double newX;
       if (collapsedCenterX < third) {
@@ -162,11 +161,15 @@ class _ScrollOverlayState extends State<ScrollOverlay>
         newX = pos.x + cs - expandedWidth;
       }
 
-      newX = newX.clamp(
-          0.0, (screenWidth - expandedWidth).clamp(0.0, screenWidth));
-      final newY = (collapsedCenterY - expandedHeight / 2).clamp(
-          0.0,
-          (screenHeight - expandedHeight).clamp(0.0, screenHeight));
+      if (screenWidth > 0) {
+        newX = newX.clamp(
+            0.0, (screenWidth - expandedWidth).clamp(0.0, screenWidth));
+      }
+      final newY = screenHeight > 0
+          ? (collapsedCenterY - expandedHeight / 2).clamp(
+              0.0,
+              (screenHeight - expandedHeight).clamp(0.0, screenHeight))
+          : (collapsedCenterY - expandedHeight / 2);
 
       await OverlayService.resizeToExpanded(expandedWidth, expandedHeight);
       await OverlayService.moveOverlay(newX, newY);
@@ -236,8 +239,7 @@ class _ScrollOverlayState extends State<ScrollOverlay>
 
   Future<void> _resizeExpanded() async {
     try {
-      final screen = ScreenService.getScreenSize();
-      final width = _computeExpandedWidth(screen.width);
+      final width = _computeExpandedWidth();
       final height = _expandedHeight;
       await OverlayService.resizeToExpanded(width, height);
     } catch (_) {}
