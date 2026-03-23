@@ -216,43 +216,57 @@ class _PermissionPageState extends State<PermissionPage>
       backgroundColor: const Color(0xFFF5E6C8),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 children: [
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: 80,
-                    height: 80,
-                    child: SvgPicture.asset(
-                      'assets/svg/compass_rose.svg',
-                      fit: BoxFit.contain,
-                    ),
+                  const SizedBox(height: 16),
+                  // Compact header row
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: SvgPicture.asset(
+                          'assets/svg/compass_rose.svg',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'NWT Scroller',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: brown,
+                              ),
+                            ),
+                            Text(
+                              'Quick Bible navigation overlay',
+                              style: TextStyle(fontSize: 13, color: brownLight),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_permissionGranted && _overlayActive)
+                        Icon(Icons.check_circle,
+                            color: Colors.green.shade700, size: 24),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'NWT Scroller',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: brown,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Quick Bible navigation overlay',
-                    style: TextStyle(fontSize: 16, color: brownLight),
-                  ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
                   if (!_permissionGranted) ...[
                     Text(
                       'Overlay permission is required to display the scroll navigator above other apps.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, color: brown),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: () async {
                         await _checkPermission();
@@ -266,42 +280,33 @@ class _PermissionPageState extends State<PermissionPage>
                         backgroundColor: const Color(0xFF8B4513),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 16),
+                            horizontal: 24, vertical: 12),
                       ),
                     ),
                   ] else ...[
-                    if (_overlayActive) ...[
-                      Icon(Icons.check_circle,
-                          color: Colors.green.shade700, size: 32),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Overlay is running',
-                        style: TextStyle(
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w500,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _closeApp,
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('Close App'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8B6F47),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                    ElevatedButton.icon(
-                      onPressed: _closeApp,
-                      icon: const Icon(Icons.close),
-                      label: const Text('Close App'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B6F47),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'The overlay will keep running after closing.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: brownLight),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Overlay keeps running',
+                          style: TextStyle(fontSize: 12, color: brownLight),
+                        ),
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   if (_configLoaded) ...[
                     TabBar(
                       controller: _tabController,
@@ -314,8 +319,7 @@ class _PermissionPageState extends State<PermissionPage>
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.6,
+                    Expanded(
                       child: TabBarView(
                         controller: _tabController,
                         children: [
@@ -505,6 +509,19 @@ class _PermissionPageState extends State<PermissionPage>
           ),
           const SizedBox(height: 16),
           _buildInteractionStyleRow(brown),
+          const SizedBox(height: 12),
+          _buildSliderRow(
+            label: 'Opacity',
+            value: _config.overlayOpacity,
+            min: 0.1,
+            max: 1.0,
+            divisions: 9,
+            displayValue: '${(_config.overlayOpacity * 100).round()}%',
+            onChanged: (v) {
+              _updateConfig(() => _config.overlayOpacity = v);
+            },
+            brown: brown,
+          ),
         ],
       ),
     );

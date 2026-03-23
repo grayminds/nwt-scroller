@@ -63,7 +63,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
 
   int _chapterPickerKey = 0;
   int _versePickerKey = 0;
-  Timer? _autoCollapseTimer;
+  Timer? _fadeTimer;
+  bool _showExtraRows = true;
 
   BibleBook get _currentBook => widget.books[_selectedBook];
   int get _chapterCount => _currentBook.chapterCount;
@@ -86,6 +87,11 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     _verseController =
         FixedExtentScrollController(initialItem: _selectedVerse);
     _loadHistory();
+    if (_interactionStyle == 2) {
+      _fadeTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showExtraRows = false);
+      });
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -95,17 +101,20 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
 
   int get _interactionStyle => widget.config.interactionStyle;
 
-  void _resetAutoCollapseTimer() {
+  void _resetFadeTimer() {
     if (_interactionStyle != 2) return;
-    _autoCollapseTimer?.cancel();
-    _autoCollapseTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) widget.onCollapse();
+    _fadeTimer?.cancel();
+    if (!_showExtraRows) {
+      setState(() => _showExtraRows = true);
+    }
+    _fadeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showExtraRows = false);
     });
   }
 
   @override
   void dispose() {
-    _autoCollapseTimer?.cancel();
+    _fadeTimer?.cancel();
     _bookController.dispose();
     _chapterController.dispose();
     _verseController.dispose();
@@ -126,7 +135,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     _verseController.dispose();
     _verseController = FixedExtentScrollController(initialItem: 0);
     widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
-    _resetAutoCollapseTimer();
+    _resetFadeTimer();
   }
 
   void _onChapterChanged(int index) {
@@ -139,7 +148,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     _verseController.dispose();
     _verseController = FixedExtentScrollController(initialItem: 0);
     widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
-    _resetAutoCollapseTimer();
+    _resetFadeTimer();
   }
 
   void _onVerseChanged(int index) {
@@ -148,7 +157,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
       _selectedVerse = index;
     });
     widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
-    _resetAutoCollapseTimer();
+    _resetFadeTimer();
   }
 
   String get _language => widget.config.language;
@@ -170,7 +179,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
 
   Future<void> _onVerseTap(int index) async {
     widget.haptics.selectionClick();
-    _autoCollapseTimer?.cancel();
+    _fadeTimer?.cancel();
     final ref = BibleReference(
       book: _currentBook.number,
       chapter: _selectedChapter + 1,
@@ -207,6 +216,8 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
     await LauncherService.launch(entry.reference);
   }
 
+  double get _opacity => widget.config.overlayOpacity;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox.expand(
@@ -218,21 +229,27 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Left handle (left half of compass rose)
-              LeftHandle(
-                theme: widget.theme,
-                width: _handleWidth,
-                onTap: widget.onCollapse,
-                onSwipeUp: _toggleHistory,
+              _wrapHandle(
+                LeftHandle(
+                  theme: widget.theme,
+                  width: _handleWidth,
+                  onTap: widget.onCollapse,
+                  onSwipeUp: _toggleHistory,
+                ),
+                isLeft: true,
               ),
               // Tube body — transparent; only selection row has background
               Expanded(
                 child: _buildPickerBody(),
               ),
               // Right handle — opens config page
-              RightHandle(
-                theme: widget.theme,
-                width: _handleWidth,
-                onTap: _openConfigPage,
+              _wrapHandle(
+                RightHandle(
+                  theme: widget.theme,
+                  width: _handleWidth,
+                  onTap: _openConfigPage,
+                ),
+                isLeft: false,
               ),
             ],
           ),
@@ -256,26 +273,79 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
   /// Wraps a picker with top/bottom fade gradients so non-selected rows
   /// fade out — keeps the overlay subtle.
   Widget _fadedPicker(Widget picker) {
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.10),
-            Colors.white.withValues(alpha: 0.40),
-            Colors.white.withValues(alpha: 0.75),
-            Colors.white,
-            Colors.white,
-            Colors.white.withValues(alpha: 0.75),
-            Colors.white.withValues(alpha: 0.40),
-            Colors.white.withValues(alpha: 0.10),
-          ],
-          stops: const [0.0, 0.12, 0.25, 0.38, 0.62, 0.75, 0.88, 1.0],
-        ).createShader(bounds);
+    final double target = (_interactionStyle == 2 && !_showExtraRows) ? 1.0 : 0.0;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: target),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      builder: (context, t, child) {
+        // Interpolate between normal fade and tight (center-only) fade
+        // Normal: edges at 0.10 alpha, visible from 38%–62%
+        // Tight: edges at 0.0, visible only at 46%–54%
+        final colors = [
+          Colors.white.withValues(alpha: _lerp(0.10, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.40, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.75, 0.0, t)),
+          Colors.white,
+          Colors.white,
+          Colors.white.withValues(alpha: _lerp(0.75, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.40, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.10, 0.0, t)),
+        ];
+        final stops = [
+          0.0,
+          _lerp(0.12, 0.30, t),
+          _lerp(0.25, 0.42, t),
+          _lerp(0.38, 0.46, t),
+          _lerp(0.62, 0.54, t),
+          _lerp(0.75, 0.58, t),
+          _lerp(0.88, 0.70, t),
+          1.0,
+        ];
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: colors,
+              stops: stops,
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: child,
+        );
       },
-      blendMode: BlendMode.dstIn,
       child: picker,
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  Widget _wrapHandle(Widget handle, {required bool isLeft}) {
+    if (_interactionStyle != 2) return handle;
+    // Semicircle background matching the compass half shape
+    final radius = Radius.circular(_handleWidth);
+    return SizedBox(
+      width: _handleWidth,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: Container(
+              width: _handleWidth,
+              height: _handleWidth * 2,
+              decoration: BoxDecoration(
+                color: widget.theme.background.withValues(alpha: _opacity),
+                borderRadius: isLeft
+                    ? BorderRadius.only(topLeft: radius, bottomLeft: radius)
+                    : BorderRadius.only(topRight: radius, bottomRight: radius),
+              ),
+            ),
+          ),
+          handle,
+        ],
+      ),
     );
   }
 
@@ -290,7 +360,7 @@ class _ExpandedScrollState extends State<ExpandedScroll> {
           child: Container(
             height: ie * widget.config.selectionBarHeight,
             decoration: BoxDecoration(
-              color: widget.theme.background.withValues(alpha: 0.75),
+              color: widget.theme.background.withValues(alpha: _opacity),
               borderRadius: BorderRadius.circular(4),
               border: Border.symmetric(
                 horizontal: BorderSide(

@@ -16,6 +16,7 @@ class ConfigService {
   static const _languageKey = 'language';
   static const _selectionBarHeightKey = 'selection_bar_height';
   static const _interactionStyleKey = 'interaction_style';
+  static const _overlayOpacityKey = 'overlay_opacity';
 
   bool hapticEnabled = true;
   HapticIntensity hapticIntensity = HapticIntensity.light;
@@ -28,6 +29,7 @@ class ConfigService {
   String language = 'English';
   double selectionBarHeight = 1.0;
   int interactionStyle = 1;
+  double overlayOpacity = 0.75;
   double screenWidth = 0;
   double screenHeight = 0;
 
@@ -58,6 +60,8 @@ class ConfigService {
     selectionBarHeight =
         (prefs.getDouble(_selectionBarHeightKey) ?? 1.0).clamp(0.5, 2.0);
     interactionStyle = (prefs.getInt(_interactionStyleKey) ?? 1).clamp(1, 2);
+    overlayOpacity =
+        (prefs.getDouble(_overlayOpacityKey) ?? 0.75).clamp(0.1, 1.0);
   }
 
   Future<void> save() async {
@@ -73,6 +77,7 @@ class ConfigService {
     await prefs.setString(_languageKey, language);
     await prefs.setDouble(_selectionBarHeightKey, selectionBarHeight);
     await prefs.setInt(_interactionStyleKey, interactionStyle);
+    await prefs.setDouble(_overlayOpacityKey, overlayOpacity);
   }
 
   Map<String, dynamic> toMap() {
@@ -89,6 +94,7 @@ class ConfigService {
       'language': language,
       'selectionBarHeight': selectionBarHeight,
       'interactionStyle': interactionStyle,
+      'overlayOpacity': overlayOpacity,
       'screenWidth': screenWidth,
       'screenHeight': screenHeight,
     };
@@ -113,6 +119,8 @@ class ConfigService {
         (map['selectionBarHeight'] as num?)?.toDouble() ?? selectionBarHeight;
     interactionStyle =
         (map['interactionStyle'] as int?)?.clamp(1, 2) ?? interactionStyle;
+    overlayOpacity =
+        (map['overlayOpacity'] as num?)?.toDouble().clamp(0.1, 1.0) ?? overlayOpacity;
     final sw = (map['screenWidth'] as num?)?.toDouble();
     if (sw != null && sw > 0) screenWidth = sw;
     final sh = (map['screenHeight'] as num?)?.toDouble();

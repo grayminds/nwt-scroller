@@ -7,12 +7,14 @@ class CollapsedScroll extends StatefulWidget {
   final ScrollTheme theme;
   final VoidCallback onTap;
   final int interactionStyle;
+  final double overlayOpacity;
 
   const CollapsedScroll({
     super.key,
     required this.theme,
     required this.onTap,
     this.interactionStyle = 1,
+    this.overlayOpacity = 0.75,
   });
 
   @override
@@ -70,7 +72,7 @@ class _CollapsedScrollState extends State<CollapsedScroll> {
         child: widget.interactionStyle == 2
             ? Container(
                 decoration: BoxDecoration(
-                  color: widget.theme.background.withValues(alpha: 0.75),
+                  color: widget.theme.background.withValues(alpha: widget.overlayOpacity),
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(2),

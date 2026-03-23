@@ -316,6 +316,7 @@ class _ScrollOverlayState extends State<ScrollOverlay>
         theme: _theme,
         onTap: _expand,
         interactionStyle: _config.interactionStyle,
+        overlayOpacity: _config.overlayOpacity,
       );
     }
 

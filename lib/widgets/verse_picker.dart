@@ -52,6 +52,7 @@ class _VersePickerState extends State<VersePicker> {
         itemExtent: widget.itemExtent,
         diameterRatio: 1.8,
         squeeze: 0.9,
+        backgroundColor: const Color(0x00000000),
         selectionOverlay: const SizedBox.shrink(),
         onSelectedItemChanged: widget.onSelectedItemChanged,
         children: List.generate(widget.verseCount, (i) {
