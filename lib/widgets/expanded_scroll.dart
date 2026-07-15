@@ -1,0 +1,407 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:nwt_vibration/nwt_vibration.dart';
+import '../models/bible_data.dart';
+import '../models/bible_reference.dart';
+import '../models/history_entry.dart';
+import '../services/haptic_service.dart';
+import '../services/launcher_service.dart';
+import '../services/config_service.dart';
+import '../services/overlay_service.dart';
+import '../data/history_repository.dart';
+import '../theme/scroll_theme.dart';
+import 'book_picker.dart';
+import 'chapter_picker.dart';
+import 'verse_picker.dart';
+import 'left_handle.dart';
+import 'right_handle.dart';
+
+class ExpandedScroll extends StatefulWidget {
+  final List<BibleBook> books;
+  final ScrollTheme theme;
+  final ConfigService config;
+  final HapticService haptics;
+  final HistoryRepository historyRepo;
+  final VoidCallback onCollapse;
+  final VoidCallback onConfigChanged;
+  final int initialBook;
+  final int initialChapter;
+  final int initialVerse;
+  final void Function(int book, int chapter, int verse) onSelectionChanged;
+
+  const ExpandedScroll({
+    super.key,
+    required this.books,
+    required this.theme,
+    required this.config,
+    required this.haptics,
+    required this.historyRepo,
+    required this.onCollapse,
+    required this.onConfigChanged,
+    this.initialBook = 0,
+    this.initialChapter = 0,
+    this.initialVerse = 0,
+    required this.onSelectionChanged,
+  });
+
+  @override
+  State<ExpandedScroll> createState() => _ExpandedScrollState();
+}
+
+class _ExpandedScrollState extends State<ExpandedScroll> {
+  late FixedExtentScrollController _bookController;
+  late FixedExtentScrollController _chapterController;
+  late FixedExtentScrollController _verseController;
+
+  late int _selectedBook;
+  late int _selectedChapter;
+  late int _selectedVerse;
+
+  Timer? _fadeTimer;
+  bool _showExtraRows = true;
+
+  BibleBook get _currentBook => widget.books[_selectedBook];
+  int get _chapterCount => _currentBook.chapterCount;
+  int get _verseCount => _currentBook.verseCount(_selectedChapter + 1);
+
+  int get _compassSize =>
+      OverlayService.compassSize(widget.config.overlayScale);
+  double get _handleWidth => OverlayService.handleWidth(_compassSize);
+  double get _itemExtent => _compassSize / 3.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedBook = widget.initialBook.clamp(0, widget.books.length - 1);
+    _selectedChapter = widget.initialChapter.clamp(0, _chapterCount - 1);
+    _selectedVerse = widget.initialVerse.clamp(0, _verseCount - 1);
+    _bookController = FixedExtentScrollController(initialItem: _selectedBook);
+    _chapterController =
+        FixedExtentScrollController(initialItem: _selectedChapter);
+    _verseController =
+        FixedExtentScrollController(initialItem: _selectedVerse);
+    if (_interactionStyle == InteractionStyle.minimalFade) {
+      _fadeTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showExtraRows = false);
+      });
+    }
+  }
+
+  InteractionStyle get _interactionStyle => widget.config.interactionStyle;
+
+  void _resetFadeTimer() {
+    if (_interactionStyle != InteractionStyle.minimalFade) return;
+    _fadeTimer?.cancel();
+    if (!_showExtraRows) {
+      setState(() => _showExtraRows = true);
+    }
+    _fadeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showExtraRows = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeTimer?.cancel();
+    _bookController.dispose();
+    _chapterController.dispose();
+    _verseController.dispose();
+    super.dispose();
+  }
+
+  void _onBookChanged(int index) {
+    widget.haptics.tick();
+    setState(() {
+      _selectedBook = index;
+      _selectedChapter = 0;
+      _selectedVerse = 0;
+    });
+    // Reset the chapter and verse wheels to the top without disposing the
+    // controllers mid-scroll.  Disposing an attached controller during the
+    // book wheel's ballistic settle drops physics and can snap visibly, so
+    // reuse the same controllers and jump them to item 0 instead.
+    if (_chapterController.hasClients) _chapterController.jumpToItem(0);
+    if (_verseController.hasClients) _verseController.jumpToItem(0);
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetFadeTimer();
+  }
+
+  void _onChapterChanged(int index) {
+    widget.haptics.tick();
+    setState(() {
+      _selectedChapter = index;
+      _selectedVerse = 0;
+    });
+    // Reset the verse wheel without disposing its controller mid-scroll.
+    if (_verseController.hasClients) _verseController.jumpToItem(0);
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetFadeTimer();
+  }
+
+  void _onVerseChanged(int index) {
+    widget.haptics.tick();
+    setState(() {
+      _selectedVerse = index;
+    });
+    widget.onSelectionChanged(_selectedBook, _selectedChapter, _selectedVerse);
+    _resetFadeTimer();
+  }
+
+  String get _language => widget.config.language;
+
+  Future<void> _onBookTap(int index) async {
+    widget.haptics.selectionClick();
+    await LauncherService.launchBook(_currentBook.number, _currentBook.name, language: _language);
+  }
+
+  Future<void> _onChapterTap(int index) async {
+    widget.haptics.selectionClick();
+    await LauncherService.launchChapter(
+      _currentBook.number,
+      _selectedChapter + 1,
+      _currentBook.name,
+      language: _language,
+    );
+  }
+
+  Future<void> _onVerseTap(int index) async {
+    widget.haptics.selectionClick();
+    _fadeTimer?.cancel();
+    final ref = BibleReference(
+      book: _currentBook.number,
+      chapter: _selectedChapter + 1,
+      verse: _selectedVerse + 1,
+      bookName: _currentBook.name,
+    );
+    final success = await LauncherService.launch(ref, language: _language);
+    if (!mounted) return;
+    if (success) {
+      final entry = HistoryEntry(
+        reference: ref,
+        timestamp: DateTime.now(),
+      );
+      // History persists for the config app's History tab.  The overlay has
+      // no history popup, so there is nothing to reload here.
+      await widget.historyRepo.add(entry);
+      if (!mounted) return;
+    }
+    // Style 2: auto-collapse after verse selection
+    if (_interactionStyle == InteractionStyle.minimalFade && mounted) {
+      widget.onCollapse();
+    }
+  }
+
+  void _openConfigPage() {
+    NwtVibration.openMainApp();
+  }
+
+  double get _opacity => widget.config.overlayOpacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Main tube bar
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left handle (left half of compass rose)
+              _wrapHandle(
+                LeftHandle(
+                  theme: widget.theme,
+                  width: _handleWidth,
+                  onTap: widget.onCollapse,
+                ),
+                isLeft: true,
+              ),
+              // Tube body — transparent; only selection row has background
+              Expanded(
+                child: _buildPickerBody(),
+              ),
+              // Right handle — opens config page
+              _wrapHandle(
+                RightHandle(
+                  theme: widget.theme,
+                  width: _handleWidth,
+                  onTap: _openConfigPage,
+                ),
+                isLeft: false,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Wraps a picker with top/bottom fade gradients so non-selected rows
+  /// fade out — keeps the overlay subtle.
+  Widget _fadedPicker(Widget picker) {
+    final double target = (_interactionStyle == InteractionStyle.minimalFade && !_showExtraRows) ? 1.0 : 0.0;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: target),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      builder: (context, t, child) {
+        // Interpolate between normal fade and tight (center-only) fade
+        // Normal: edges at 0.10 alpha, visible from 38%–62%
+        // Tight: edges at 0.0, visible only at 46%–54%
+        final colors = [
+          Colors.white.withValues(alpha: _lerp(0.10, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.40, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.75, 0.0, t)),
+          Colors.white,
+          Colors.white,
+          Colors.white.withValues(alpha: _lerp(0.75, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.40, 0.0, t)),
+          Colors.white.withValues(alpha: _lerp(0.10, 0.0, t)),
+        ];
+        final stops = [
+          0.0,
+          _lerp(0.12, 0.30, t),
+          _lerp(0.25, 0.42, t),
+          _lerp(0.38, 0.46, t),
+          _lerp(0.62, 0.54, t),
+          _lerp(0.75, 0.58, t),
+          _lerp(0.88, 0.70, t),
+          1.0,
+        ];
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: colors,
+              stops: stops,
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: child,
+        );
+      },
+      child: picker,
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  Widget _wrapHandle(Widget handle, {required bool isLeft}) {
+    if (_interactionStyle != InteractionStyle.minimalFade) return handle;
+    // Semicircle background matching the compass half shape
+    final radius = Radius.circular(_handleWidth);
+    return SizedBox(
+      width: _handleWidth,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: Container(
+              width: _handleWidth,
+              height: _handleWidth * 2,
+              decoration: BoxDecoration(
+                color: widget.theme.background.withValues(alpha: _opacity),
+                borderRadius: isLeft
+                    ? BorderRadius.only(topLeft: radius, bottomLeft: radius)
+                    : BorderRadius.only(topRight: radius, bottomRight: radius),
+              ),
+            ),
+          ),
+          handle,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickerBody() {
+    final ie = _itemExtent;
+    final fs = widget.config.fontSize;
+
+    return Stack(
+      children: [
+        // Selection row background with gold accent lines matching compass
+        Center(
+          child: Container(
+            height: ie * widget.config.selectionBarHeight,
+            decoration: BoxDecoration(
+              color: widget.theme.background.withValues(alpha: _opacity),
+              border: Border.symmetric(
+                horizontal: BorderSide(
+                  color: widget.theme.knobTint.withValues(alpha: 0.7),
+                  width: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Pickers on top
+        Row(
+          children: [
+            // Book picker — flex 5
+            Expanded(
+              flex: 5,
+              child: _fadedPicker(
+                BookPicker(
+                  books: widget.books,
+                  controller: _bookController,
+                  nameLength: widget.config.nameLength,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onBookChanged,
+                  onTap: _onBookTap,
+                ),
+              ),
+            ),
+            Container(
+              width: 1,
+              height: ie * 0.8,
+              color: widget.theme.divider.withValues(alpha: 0.3),
+            ),
+            // Chapter picker — flex 2
+            Expanded(
+              flex: 2,
+              child: _fadedPicker(
+                ChapterPicker(
+                  chapterCount: _chapterCount,
+                  controller: _chapterController,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onChapterChanged,
+                  onTap: _onChapterTap,
+                ),
+              ),
+            ),
+            // Colon separator
+            Text(
+              ':',
+              style: TextStyle(
+                color: widget.theme.textSecondary.withValues(alpha: 0.7),
+                fontSize: fs - 1,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            // Verse picker — flex 2
+            Expanded(
+              flex: 2,
+              child: _fadedPicker(
+                VersePicker(
+                  verseCount: _verseCount,
+                  controller: _verseController,
+                  fontSize: fs,
+                  itemExtent: ie,
+                  theme: widget.theme,
+                  onSelectedItemChanged: _onVerseChanged,
+                  onTap: _onVerseTap,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

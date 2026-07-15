@@ -1,0 +1,18 @@
+name: nwt_vibration
+description: Native vibration plugin for NWT Scroller overlay engine
+version: 1.0.0
+
+environment:
+  sdk: ^3.7.0
+  flutter: '>=3.0.0'
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.nwtscroller.vibration
+        pluginClass: NwtVibrationPlugin
+
+dependencies:
+  flutter:
+    sdk: flutter
